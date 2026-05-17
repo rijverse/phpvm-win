@@ -1,0 +1,29 @@
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Build / output
+out/
+dist/
+*.zip
+*.sha256
+
+# Backups / temp
+*.bak
+*.tmp
+*.log
+*.orig
+
+# Pester test results
+TestResults*.xml
+coverage*.xml
+
+# PowerShell module cache
+*.psm1xml

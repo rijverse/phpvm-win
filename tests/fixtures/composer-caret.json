@@ -1,0 +1,6 @@
+{
+  "name": "phpvm/fixture-caret",
+  "require": {
+    "php": "^8.2"
+  }
+}

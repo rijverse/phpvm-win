@@ -1,0 +1,6 @@
+{
+  "name": "phpvm/fixture-tilde",
+  "require": {
+    "php": "~8.1.5"
+  }
+}

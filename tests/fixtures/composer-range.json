@@ -1,0 +1,6 @@
+{
+  "name": "phpvm/fixture-range",
+  "require": {
+    "php": ">=7.4 <8.2"
+  }
+}
