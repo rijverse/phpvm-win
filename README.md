@@ -1,8 +1,8 @@
 # phpvm-windows
 
-> Per-project PHP version manager for Windows. Sister project to [phpvm](https://github.com/OWNER/php-switcher) (Linux/macOS).
+> Per-project PHP version manager for Windows. Sister project to [phpvm](https://github.com/rijoanul-shanto/phpvm) (Linux/macOS).
 
-[![CI](https://github.com/OWNER/phpvm-windows/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/phpvm-windows/actions/workflows/ci.yml)
+[![CI](https://github.com/rijoanul-shanto/phpvm-win/actions/workflows/ci.yml/badge.svg)](https://github.com/rijoanul-shanto/phpvm-win/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 `phpvm` discovers every PHP install on your machine — Scoop, XAMPP, Laragon, WAMP, or hand-extracted zips — and lets you swap the active version instantly without editing `PATH`.
@@ -18,14 +18,14 @@
 One-liner (PowerShell, no admin required):
 
 ```powershell
-irm https://raw.githubusercontent.com/OWNER/phpvm-windows/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/rijoanul-shanto/phpvm-win/main/install.ps1 | iex
 ```
 
 Or clone and run manually:
 
 ```powershell
-git clone https://github.com/OWNER/phpvm-windows
-cd phpvm-windows
+git clone https://github.com/rijoanul-shanto/phpvm-win
+cd phpvm-win
 .\install.ps1
 ```
 
