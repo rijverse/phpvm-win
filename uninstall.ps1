@@ -1,4 +1,4 @@
-# uninstall.ps1 — remove phpvm-windows
+# uninstall.ps1 - remove phpvm-windows
 # Leaves all PHP installations untouched.
 
 [CmdletBinding()]
@@ -51,7 +51,20 @@ if ($KeepActiveLog) {
     if (Test-Path -LiteralPath $activeFile) {
         $backup = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'phpvm-last-active.txt'
         Copy-Item -LiteralPath $activeFile -Destination $backup -Force
-        Write-Host "phpvm: preserved active log → $backup"
+        Write-Host "phpvm: preserved active log -> $backup"
+    }
+}
+
+# Remove per-version junctions FIRST. A recursive delete would otherwise follow
+# them into the real PHP installs and wipe them out - the junctions under
+# versions\<minor> point straight at the actual install dirs.
+$versionsDir = Join-Path $installRoot 'versions'
+if (Test-Path -LiteralPath $versionsDir) {
+    Get-ChildItem -LiteralPath $versionsDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.LinkType -eq 'Junction' -or $_.LinkType -eq 'SymbolicLink') {
+            try { [System.IO.Directory]::Delete($_.FullName, $false) }
+            catch { & cmd /c rmdir "$($_.FullName)" 2>$null }
+        }
     }
 }
 
@@ -76,4 +89,4 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
 
 Write-Host ''
 Write-Host "phpvm: uninstall complete."
-Write-Host "PHP installations were left untouched — uninstall them via Scoop / Chocolatey / manually."
+Write-Host "PHP installations were left untouched - uninstall them via Scoop / Chocolatey / manually."

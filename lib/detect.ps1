@@ -1,15 +1,60 @@
-# lib/detect.ps1 — PHP discovery (Scoop + directory scan)
+# lib/detect.ps1 - PHP discovery (Scoop + directory scan)
 # Returns array of PSCustomObject: Version, Minor, Path, Dir, Source, Active
 
 Set-StrictMode -Version Latest
 
 function Get-PhpvmRoot {
-    $home = [Environment]::GetFolderPath('UserProfile')
-    Join-Path $home '.phpvm'
+    # PHPVM_ROOT relocates the install (and isolates tests). The resolver shim
+    # honors the same override, so the two stay consistent.
+    if ($env:PHPVM_ROOT) { return $env:PHPVM_ROOT }
+    $userHome = [Environment]::GetFolderPath('UserProfile')
+    Join-Path $userHome '.phpvm'
 }
 
 function Get-PhpvmShimDir {
     Join-Path (Get-PhpvmRoot) 'shim'
+}
+
+function Get-PhpvmVersionsDir {
+    # Per-version junctions live here: versions\<minor> -> real install dir.
+    Join-Path (Get-PhpvmRoot) 'versions'
+}
+
+function Get-PhpvmPhpDir {
+    # Downloaded builds (phpvm install) extract here: php\<minor>.
+    Join-Path (Get-PhpvmRoot) 'php'
+}
+
+function Resolve-PhpvmEffectiveMinor {
+    # The three-layer precedence, mirroring the resolver shim: shell > project >
+    # global. Each argument is a minor string (e.g. '8.2') or empty.
+    param(
+        [string]$Shell,
+        [string]$Project,
+        [string]$Global
+    )
+    if ($Shell)   { return $Shell }
+    if ($Project) { return $Project }
+    if ($Global)  { return $Global }
+    return $null
+}
+
+function Get-PhpvmShimStatus {
+    # Shared shim-state probe used by --current, shell, and doctor.
+    #   active   - 'php' resolves to our shim
+    #   shadowed - 'php' resolves to some other php.exe ahead of the shim
+    #   absent   - the shim file is not written yet
+    #   noshim   - no 'php' on PATH at all
+    $shimDir = Get-PhpvmShimDir
+    $shimCmd = Join-Path $shimDir 'php.cmd'
+    if (-not (Test-Path -LiteralPath $shimCmd)) { return 'absent' }
+    $cmd = Get-Command -Name php -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cmd) { return 'noshim' }
+    $resolved = "$($cmd.Source)"
+    if ($resolved -and $resolved.ToLowerInvariant().StartsWith($shimDir.ToLowerInvariant())) {
+        return 'active'
+    }
+    return 'shadowed'
 }
 
 function Get-PhpvmActiveMeta {
@@ -134,6 +179,31 @@ function Get-FilesystemPhpInstalls {
     return $results
 }
 
+function Get-PhpvmManagedInstalls {
+    # Builds installed by `phpvm install` live under %USERPROFILE%\.phpvm\php\<minor>.
+    # These are always discovered, independent of PHPVM_SEARCH_PATHS.
+    $phpRoot = Get-PhpvmPhpDir
+    if (-not (Test-Path -LiteralPath $phpRoot)) { return @() }
+    $results = @()
+    Get-ChildItem -LiteralPath $phpRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $phpExe = Join-Path $_.FullName 'php.exe'
+        if (Test-Path -LiteralPath $phpExe) {
+            $v = Get-PhpExeVersion -Path $phpExe
+            if ($v) {
+                $results += [pscustomobject]@{
+                    Version = $v
+                    Minor   = ConvertTo-PhpMinor $v
+                    Path    = $phpExe
+                    Dir     = $_.FullName
+                    Source  = 'phpvm'
+                    Active  = $false
+                }
+            }
+        }
+    }
+    return $results
+}
+
 function Compare-PhpVersion {
     param([string]$A, [string]$B)
     $pa = ($A -split '\.') + @('0', '0', '0') | Select-Object -First 3
@@ -151,6 +221,7 @@ function Get-AllPhpInstalls {
     param()
 
     $all = @()
+    $all += Get-PhpvmManagedInstalls
     $all += Get-ScoopPhpInstalls
     $all += Get-FilesystemPhpInstalls
 
@@ -165,8 +236,16 @@ function Get-AllPhpInstalls {
         }
     }
 
-    # Sort semver-aware descending
-    $sorted = $unique | Sort-Object -Property @{ Expression = { [version]($_.Version + '.0.0.0'.Substring(0, [Math]::Max(0, 7 - $_.Version.Length))) }; Descending = $true }
+    # Sort semver-aware descending. Wrap in @() so a single install stays an
+    # array through the `return ,$sorted` below (a bare scalar would collapse).
+    $sorted = @($unique | Sort-Object -Property @{
+        Expression = {
+            $parts = $_.Version -split '\.'
+            while ($parts.Count -lt 4) { $parts += '0' }
+            [version](($parts | Select-Object -First 4) -join '.')
+        }
+        Descending = $true
+    })
 
     # Mark active
     $active = Get-ActivePhpInstall -Installs $sorted
@@ -226,7 +305,7 @@ function Find-PhpInstallByQuery {
     $hit = $Installs | Where-Object { $_.Version -eq $q } | Select-Object -First 1
     if ($hit) { return $hit }
 
-    # Minor match — pick highest patch
+    # Minor match - pick highest patch
     if ($q -match '^\d+\.\d+$') {
         $hits = $Installs | Where-Object { $_.Minor -eq $q }
         if ($hits) {
@@ -242,4 +321,32 @@ function Find-PhpInstallByQuery {
     if ($hits) { return $hits | Select-Object -First 1 }
 
     return $null
+}
+
+function Resolve-PhpvmWhich {
+    # Resolve a version query to a php.exe path. Returns the bare path or $null.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Query,
+        [object[]]$Installs
+    )
+    if (-not $Installs) { $Installs = Get-AllPhpInstalls }
+    $hit = Find-PhpInstallByQuery -Query $Query -Installs $Installs
+    if ($hit) { return $hit.Path }
+    return $null
+}
+
+function ConvertTo-PhpInstallsJson {
+    # Serialize installs to a JSON array of {version, path, active}. Always an array.
+    [CmdletBinding()]
+    param([object[]]$Installs)
+    if (-not $Installs -or $Installs.Count -eq 0) { return '[]' }
+    $rows = foreach ($i in $Installs) {
+        [ordered]@{
+            version = $i.Version
+            path    = $i.Path
+            active  = [bool]$i.Active
+        }
+    }
+    return (ConvertTo-Json -InputObject @($rows) -Depth 4)
 }

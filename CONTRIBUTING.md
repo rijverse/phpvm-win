@@ -14,8 +14,8 @@ Requirements:
 Clone and run tests:
 
 ```powershell
-git clone https://github.com/OWNER/phpvm-windows
-cd phpvm-windows
+git clone https://github.com/rijverse/phpvm-win
+cd phpvm-win
 Invoke-Pester ./tests
 ```
 
@@ -25,9 +25,11 @@ Invoke-Pester ./tests
 | --- | --- |
 | `phpvm.ps1` | CLI entry + dispatcher |
 | `lib/detect.ps1` | PHP discovery |
-| `lib/switch.ps1` | Shim rewrite |
+| `lib/switch.ps1` | Resolver shim + per-version junctions + active state |
 | `lib/project.ps1` | `.php-version` + composer constraint parser |
+| `lib/install-php.ps1` | `phpvm install` (windows.php.net downloader) |
 | `lib/tui.ps1` | Arrow-key picker |
+| `lib/gui.ps1` | System-tray GUI (WinForms NotifyIcon) |
 | `lib/doctor.ps1` | Diagnostics |
 | `install.ps1` | Installer |
 | `uninstall.ps1` | Uninstaller |

@@ -1,4 +1,4 @@
-# lib/doctor.ps1 — diagnostics. Exit code = fail count.
+# lib/doctor.ps1 - diagnostics. Exit code = fail count.
 
 Set-StrictMode -Version Latest
 
@@ -66,24 +66,18 @@ function Invoke-PhpvmDoctor {
         $warn++
     }
 
-    # 3. php.cmd shim valid?
+    # 3. php.cmd resolver shim present + well-formed?
     $shimCmd = Join-Path $shimDir 'php.cmd'
     if (Test-Path -LiteralPath $shimCmd) {
         $content = Get-Content -LiteralPath $shimCmd -Raw -ErrorAction SilentlyContinue
-        if ($content -match '"([^"]+php\.exe)"') {
-            $target = $matches[1]
-            if (Test-Path -LiteralPath $target) {
-                _PhpvmReport pass "shim → $target"
-            } else {
-                _PhpvmReport fail "shim points at missing exe: $target" "phpvm --set <ver> to repair"
-                $fail++
-            }
+        if ($content -match 'PHPVM_SHELL_VERSION' -and $content -match 'versions\\%VER%') {
+            _PhpvmReport pass "resolver shim present: $shimCmd"
         } else {
-            _PhpvmReport fail "shim content unparseable" "phpvm --set <ver> to rewrite"
-            $fail++
+            _PhpvmReport warn "shim is an old single-target form" "phpvm global <ver> to rewrite the resolver shim"
+            $warn++
         }
     } else {
-        _PhpvmReport warn "no active version set (php.cmd shim missing)" "phpvm --set <ver>"
+        _PhpvmReport warn "no shim yet (php.cmd missing)" "phpvm global <ver>"
         $warn++
     }
 
@@ -93,7 +87,7 @@ function Invoke-PhpvmDoctor {
         try {
             $v = & $cmd.Source '-v' 2>$null | Select-Object -First 1
             if ($LASTEXITCODE -eq 0 -and $v) {
-                _PhpvmReport pass "php --version → $v"
+                _PhpvmReport pass "php --version -> $v"
             } else {
                 _PhpvmReport fail "php executable exists but '-v' failed" "check antivirus quarantine"
                 $fail++
@@ -106,6 +100,36 @@ function Invoke-PhpvmDoctor {
         _PhpvmReport fail "php not on PATH" "open a new shell, or check user PATH"
         $fail++
     }
+
+    # 4b. Per-shell switching
+    Write-Host ''
+    Write-Host "Per-shell switching:"
+    $shimStatus = Get-PhpvmShimStatus
+    switch ($shimStatus) {
+        'active'   { _PhpvmReport pass "php resolves to the phpvm shim" }
+        'shadowed' { _PhpvmReport fail "php resolves to a non-shim php.exe ahead of the shim" "another tool prepended php to PATH; open a new shell or fix PATH order"; $fail++ }
+        'absent'   { _PhpvmReport warn "no shim yet" "phpvm global <ver>"; $warn++ }
+        'noshim'   { _PhpvmReport warn "no php on PATH" "open a new shell, or phpvm global <ver>"; $warn++ }
+    }
+
+    $versionsDir = Get-PhpvmVersionsDir
+    if (Test-Path -LiteralPath $versionsDir) {
+        $junctions = @(Get-ChildItem -LiteralPath $versionsDir -Directory -ErrorAction SilentlyContinue)
+        if ($junctions.Count -gt 0) {
+            $names = ($junctions | ForEach-Object { $_.Name } | Sort-Object) -join ', '
+            _PhpvmReport pass "registered versions: $names"
+        } else {
+            _PhpvmReport info "no per-version junctions yet" "phpvm global <ver> or phpvm shell <ver> registers them"
+        }
+    } else {
+        _PhpvmReport info "versions dir not created yet: $versionsDir"
+    }
+
+    $meta = Get-PhpvmActiveMeta
+    $globalLayer  = if ($meta -and $meta.ContainsKey('minor')) { $meta['minor'] } else { '(none)' }
+    $shellLayer   = if ($env:PHPVM_SHELL_VERSION) { $env:PHPVM_SHELL_VERSION } else { '(unset)' }
+    $projectLayer = if ($env:PHPVM_AUTO_VERSION)  { $env:PHPVM_AUTO_VERSION }  else { '(none)' }
+    _PhpvmReport info "layers - shell: $shellLayer  project: $projectLayer  global: $globalLayer"
 
     # 5. Hook installed
     $profilePath = $PROFILE.CurrentUserAllHosts
@@ -144,7 +168,7 @@ function Invoke-PhpvmDoctor {
 
     # 9. PHPRC warning
     if ($env:PHPRC) {
-        _PhpvmReport warn "PHPRC is set to $env:PHPRC — may override extension dir for any active PHP"
+        _PhpvmReport warn "PHPRC is set to $env:PHPRC - may override extension dir for any active PHP"
         $warn++
     }
 

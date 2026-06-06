@@ -1,4 +1,4 @@
-# install.ps1 — phpvm-windows installer
+# install.ps1 - phpvm-windows installer
 # Idempotent. Safe to re-run. No admin required.
 
 [CmdletBinding()]
@@ -26,7 +26,7 @@ if ($PSVersionTable.PSVersion.Major -lt 5 -or
 }
 
 if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
-    throw "phpvm: PowerShell Constrained Language Mode detected — cannot install."
+    throw "phpvm: PowerShell Constrained Language Mode detected - cannot install."
 }
 
 # Source layout: when run from a clone we're at repo root; when piped via `irm | iex`
@@ -37,9 +37,9 @@ if ($PSScriptRoot -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'phpvm.p
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         throw "phpvm: install.ps1 was piped (no local source). git is required to fetch the repo."
     }
-    $repoUrl = if ($env:PHPVM_REPO) { $env:PHPVM_REPO } else { 'https://github.com/OWNER/phpvm-windows' }
+    $repoUrl = if ($env:PHPVM_REPO) { $env:PHPVM_REPO } else { 'https://github.com/rijverse/phpvm-win' }
     $srcRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("phpvm-src-" + [Guid]::NewGuid().ToString('N').Substring(0,8))
-    Write-Host "phpvm: cloning $repoUrl → $srcRoot"
+    Write-Host "phpvm: cloning $repoUrl -> $srcRoot"
     & git clone --depth 1 $repoUrl $srcRoot 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "phpvm: clone failed" }
 }
@@ -65,7 +65,7 @@ foreach ($d in @($installRoot, $binDir, $shimDir)) {
     }
 }
 
-# Copy phpvm.ps1, lib/*, uninstall.ps1 → bin
+# Copy phpvm.ps1, lib/*, uninstall.ps1 -> bin
 $payload = @(
     @{ Src = 'phpvm.ps1';     Dest = $binDir }
     @{ Src = 'uninstall.ps1'; Dest = $binDir }
@@ -95,14 +95,14 @@ Set-Content -LiteralPath $cmdWrapper -Value $cmdContent -Encoding ASCII -NoNewli
 # install.meta
 $metaFile = Join-Path $installRoot 'install.meta'
 $metaLines = @(
-    "version=1.0.0"
+    "version=2.0.0"
     "installed_at=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
     "src=$srcRoot"
 )
 if ($env:PHPVM_REPO) { $metaLines += "repo=$env:PHPVM_REPO" }
 Set-Content -LiteralPath $metaFile -Value $metaLines -Encoding UTF8
 
-# PATH update — user scope, idempotent
+# PATH update - user scope, idempotent
 function Update-UserPath {
     param([string[]]$Prepend)
     $current = [Environment]::GetEnvironmentVariable('Path', 'User')

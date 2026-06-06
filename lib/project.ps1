@@ -1,4 +1,4 @@
-# lib/project.ps1 — project detection
+# lib/project.ps1 - project detection
 # .php-version + composer.json require.php parser
 
 Set-StrictMode -Version Latest
@@ -121,8 +121,8 @@ function Test-MinorSatisfiesComparator {
         }
 
         '^' {
-            # ^X.Y[.Z] — >= X.Y.Z, < (X+1).0.0   (for X >= 1)
-            # ^0.Y.Z  — >= 0.Y.Z, < 0.(Y+1).0    (composer follows semver)
+            # ^X.Y[.Z] - >= X.Y.Z, < (X+1).0.0   (for X >= 1)
+            # ^0.Y.Z  - >= 0.Y.Z, < 0.(Y+1).0    (composer follows semver)
             if ($Cmp.Major -ge 1) {
                 if ($iMajor -ne $Cmp.Major) { return $false }
                 if ($Cmp.HasMinor -and $Cmp.Minor -ne -1) {
@@ -136,8 +136,8 @@ function Test-MinorSatisfiesComparator {
         }
 
         '~' {
-            # ~X.Y    — >= X.Y.0, < (X+1).0.0
-            # ~X.Y.Z  — >= X.Y.Z, < X.(Y+1).0
+            # ~X.Y    - >= X.Y.0, < (X+1).0.0
+            # ~X.Y.Z  - >= X.Y.Z, < X.(Y+1).0
             if (-not $Cmp.HasMinor) { return $iMajor -eq $Cmp.Major }
             if ($Cmp.HasPatch) {
                 return ($iMajor -eq $Cmp.Major -and $iMinor -eq $Cmp.Minor)
@@ -178,7 +178,7 @@ function Test-MinorSatisfiesConstraint {
         [Parameter(Mandatory)][string]$Minor,
         [Parameter(Mandatory)][string]$Constraint
     )
-    # Pipe alternatives: any branch matches → match.
+    # Pipe alternatives: any branch matches -> match.
     foreach ($branch in ($Constraint -split '\|\|?')) {
         $branch = $branch.Trim()
         if (-not $branch) { continue }
@@ -225,7 +225,7 @@ function Resolve-ProjectPhpQuery {
         }
     }
 
-    # Fallback — first X.Y in raw constraint string
+    # Fallback - first X.Y in raw constraint string
     if ($constraint -match '(\d+\.\d+)') {
         return [pscustomobject]@{ Source = $cj; Query = $matches[1]; Kind = 'composer-fallback' }
     }

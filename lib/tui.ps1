@@ -1,4 +1,4 @@
-# lib/tui.ps1 — arrow-key picker
+# lib/tui.ps1 - arrow-key picker
 # Plain System.Console; ANSI for color + cursor. No external deps.
 
 Set-StrictMode -Version Latest
@@ -26,15 +26,15 @@ function _PhpvmRender {
         [object]$Active
     )
     [Console]::Clear()
-    $bar  = '─' * 56
-    $top  = "┌$bar┐"
-    $mid  = "├$bar┤"
-    $bot  = "└$bar┘"
+    $bar  = '-' * 56
+    $top  = "+$bar+"
+    $mid  = "+$bar+"
+    $bot  = "+$bar+"
 
     Write-Host $top
-    Write-Host "│ phpvm — select PHP version" -NoNewline
+    Write-Host "| phpvm - select PHP version" -NoNewline
     Write-Host (' ' * (57 - 27)) -NoNewline
-    Write-Host '│'
+    Write-Host '|'
     Write-Host $mid
 
     for ($i = 0; $i -lt $Items.Count; $i++) {
@@ -45,18 +45,18 @@ function _PhpvmRender {
         if ($line.Length -gt 54) { $line = $line.Substring(0, 54) }
         $pad = 54 - $line.Length
         if ($i -eq $Index) {
-            Write-Host "│ " -NoNewline
+            Write-Host "| " -NoNewline
             _PhpvmAnsi '[7m'   # reverse
             Write-Host $line -NoNewline
             _PhpvmAnsi '[0m'
-            Write-Host ((' ' * $pad) + ' │')
+            Write-Host ((' ' * $pad) + ' |')
         } else {
-            Write-Host "│ $line$(' ' * $pad) │"
+            Write-Host "| $line$(' ' * $pad) |"
         }
     }
 
     Write-Host $mid
-    Write-Host "│ ↑/↓ move   Enter switch   p set-project   q quit         │"
+    Write-Host "| ^/v move   Enter switch   p set-project   q quit         |"
     Write-Host $bot
 }
 
