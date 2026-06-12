@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-06-12
+
 ### Fixed
 - The release workflow staged a non-existent `assets` directory and wrote a bare
   (key-less) line into `$GITHUB_ENV`; it now stages `docs` and writes only
@@ -142,7 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pester v5 test suite.
 - CI on `windows-latest` + `windows-2019`, PowerShell 5.1 + 7.x.
 
-[Unreleased]: https://github.com/rijverse/phpvm-win/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/rijverse/phpvm-win/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/rijverse/phpvm-win/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/rijverse/phpvm-win/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/rijverse/phpvm-win/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/rijverse/phpvm-win/compare/v1.1.0...v1.2.0

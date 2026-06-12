@@ -10,7 +10,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:PhpvmVersion = '2.0.0'
+$script:PhpvmVersion = '2.1.0'
 
 $libRoot = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libRoot 'detect.ps1')
