@@ -92,38 +92,65 @@ $cmdContent = @(
 ) -join "`r`n"
 Set-Content -LiteralPath $cmdWrapper -Value $cmdContent -Encoding ASCII -NoNewline
 
-# install.meta
+# install.meta - version comes from phpvm.ps1 so the two never drift
+$cliVersion = '0.0.0'
+$cliRaw = Get-Content -LiteralPath (Join-Path $srcRoot 'phpvm.ps1') -Raw
+if ($cliRaw -match "PhpvmVersion\s*=\s*'([^']+)'") { $cliVersion = $matches[1] }
 $metaFile = Join-Path $installRoot 'install.meta'
 $metaLines = @(
-    "version=2.0.0"
+    "version=$cliVersion"
     "installed_at=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
     "src=$srcRoot"
 )
 if ($env:PHPVM_REPO) { $metaLines += "repo=$env:PHPVM_REPO" }
 Set-Content -LiteralPath $metaFile -Value $metaLines -Encoding UTF8
 
-# PATH update - user scope, idempotent
+# PATH update - user scope, idempotent. Goes through the registry directly:
+# [Environment]::GetEnvironmentVariable returns the EXPANDED value and Set writes
+# REG_SZ, so a read-modify-write through it would permanently flatten any
+# %VAR%-style entries other tools keep in the user PATH.
+function Get-UserPathRaw {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+    if (-not $key) { return '' }
+    try {
+        return [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    } finally { $key.Close() }
+}
+
+function Set-UserPathRaw {
+    param([string]$Value)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    try {
+        $key.SetValue('Path', $Value, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+    } finally { $key.Close() }
+}
+
 function Update-UserPath {
     param([string[]]$Prepend)
-    $current = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $existing = if ($current) { $current -split ';' } else { @() }
-    $existingLower = @{}
-    foreach ($e in $existing) { if ($e) { $existingLower[$e.ToLowerInvariant()] = $true } }
+    $existing = @((Get-UserPathRaw) -split ';' | Where-Object { $_ })
+    $expandedLower = @{}
+    foreach ($e in $existing) {
+        $expandedLower[[Environment]::ExpandEnvironmentVariables($e).TrimEnd('\').ToLowerInvariant()] = $true
+    }
 
     $toAdd = @()
     foreach ($p in $Prepend) {
-        if (-not $existingLower.ContainsKey($p.ToLowerInvariant())) {
+        if (-not $expandedLower.ContainsKey($p.TrimEnd('\').ToLowerInvariant())) {
             $toAdd += $p
         }
     }
     if ($toAdd.Count -eq 0) { return $false }
 
-    $combined = (@($toAdd) + @($existing | Where-Object { $_ })) -join ';'
-    if ($combined.Length -gt 2048) {
-        Write-Warning "phpvm: user PATH would exceed 2048 chars. Trim manually before installing."
-    }
-    [Environment]::SetEnvironmentVariable('Path', $combined, 'User')
+    Set-UserPathRaw -Value ((@($toAdd) + $existing) -join ';')
     return $true
+}
+
+# A non-default prefix is invisible to the runtime (shim, hook, CLI all default
+# to ~\.phpvm), so it must be persisted as PHPVM_ROOT - they all honor that.
+if ($Prefix) {
+    [Environment]::SetEnvironmentVariable('PHPVM_ROOT', $installRoot, 'User')
+    $env:PHPVM_ROOT = $installRoot
+    Write-Host "phpvm: persisted PHPVM_ROOT=$installRoot (user env var)."
 }
 
 $pathChanged = Update-UserPath -Prepend @($binDir, $shimDir)

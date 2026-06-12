@@ -10,7 +10,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# PHPVM_ROOT relocates the install (set by install.ps1 -Prefix); mirror it here.
 $installRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.phpvm'
+if ($env:PHPVM_ROOT) { $installRoot = $env:PHPVM_ROOT }
 
 if (-not $Yes) {
     $ans = Read-Host "phpvm: remove $installRoot and strip PATH entries? [y/N]"
@@ -30,19 +32,35 @@ if (Test-Path -LiteralPath $installedCli) {
     }
 }
 
-# Strip user PATH entries
+# Strip user PATH entries. Read/write the registry value raw: going through
+# [Environment]::Get/SetEnvironmentVariable would expand and re-save every entry
+# as REG_SZ, flattening %VAR% references other tools keep in the user PATH.
 $binDir  = Join-Path $installRoot 'bin'
 $shimDir = Join-Path $installRoot 'shim'
-$current = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($current) {
-    $parts = $current -split ';' | Where-Object {
-        $_ -and ($_ -ine $binDir) -and ($_ -ine $shimDir)
-    }
-    $new = $parts -join ';'
-    if ($new -ne $current) {
-        [Environment]::SetEnvironmentVariable('Path', $new, 'User')
-        Write-Host "phpvm: removed phpvm entries from user PATH."
-    }
+$envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+if ($envKey) {
+    try {
+        $current = [string]$envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($current) {
+            $parts = $current -split ';' | Where-Object {
+                if (-not $_) { return $false }
+                $expanded = [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\')
+                ($expanded -ine $binDir.TrimEnd('\')) -and ($expanded -ine $shimDir.TrimEnd('\'))
+            }
+            $new = $parts -join ';'
+            if ($new -ne $current) {
+                $envKey.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+                Write-Host "phpvm: removed phpvm entries from user PATH."
+            }
+        }
+    } finally { $envKey.Close() }
+}
+
+# Drop the persisted PHPVM_ROOT if it points at the root being removed
+$persistedRoot = [Environment]::GetEnvironmentVariable('PHPVM_ROOT', 'User')
+if ($persistedRoot -and ($persistedRoot.TrimEnd('\') -ieq $installRoot.TrimEnd('\'))) {
+    [Environment]::SetEnvironmentVariable('PHPVM_ROOT', $null, 'User')
+    Write-Host "phpvm: removed persisted PHPVM_ROOT."
 }
 
 # Preserve .active log if requested

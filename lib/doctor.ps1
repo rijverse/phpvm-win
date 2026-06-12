@@ -166,6 +166,25 @@ function Invoke-PhpvmDoctor {
         _PhpvmReport info "no project PHP requirement in cwd or ancestors"
     }
 
+    # 8b. A .php-version that exists but does not parse is silently skipped by
+    # the resolver - surface it here, where a human is looking.
+    $dir = (Get-Location).Path
+    while ($dir) {
+        $vf = Join-Path $dir '.php-version'
+        if (Test-Path -LiteralPath $vf -PathType Leaf) {
+            $raw = Get-Content -LiteralPath $vf -Raw -ErrorAction SilentlyContinue
+            $trimmed = if ($null -ne $raw) { $raw.Trim() } else { '' }
+            if (-not $trimmed -or -not (ConvertTo-NormalizedVersionQuery -Raw $trimmed)) {
+                _PhpvmReport warn "unparseable .php-version: $vf (content: '$trimmed')" "use a bare version like 8.2"
+                $warn++
+            }
+            break
+        }
+        $parent = Split-Path -Parent $dir
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+
     # 9. PHPRC warning
     if ($env:PHPRC) {
         _PhpvmReport warn "PHPRC is set to $env:PHPRC - may override extension dir for any active PHP"

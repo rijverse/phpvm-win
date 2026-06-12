@@ -148,10 +148,14 @@ function Invoke-PhpvmTray {
 
     $script:PhpvmTrayNotify.Visible = $true
 
-    # poll every few seconds so a switch from another window updates the checkmark
+    # poll every few seconds so a switch from another window updates the checkmark.
+    # Skip while the menu is open - rebuilding would yank items out from under the
+    # cursor mid-navigation.
     $script:PhpvmTrayTimer = New-Object System.Windows.Forms.Timer
     $script:PhpvmTrayTimer.Interval = 5000
-    $script:PhpvmTrayTimer.Add_Tick({ Update-PhpvmTrayMenu })
+    $script:PhpvmTrayTimer.Add_Tick({
+        if ($script:PhpvmTrayMenu -and -not $script:PhpvmTrayMenu.Visible) { Update-PhpvmTrayMenu }
+    })
     $script:PhpvmTrayTimer.Start()
 
     $script:PhpvmTrayNotify.ShowBalloonTip(1500, 'phpvm', 'Running in the system tray. Right-click the icon.', [System.Windows.Forms.ToolTipIcon]::Info)

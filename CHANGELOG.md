@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The release workflow staged a non-existent `assets` directory and wrote a bare
+  (key-less) line into `$GITHUB_ENV`; it now stages `docs` and writes only
+  `STAGE=`. It would have failed on the first tag push.
+- CI matrix targeted the retired `windows-2019` runner image; now `windows-2022`.
+- `--enable-hook` / `--disable-hook` now write/scrub the `CurrentUserAllHosts`
+  profile of BOTH editions (`Documents\WindowsPowerShell` and
+  `Documents\PowerShell`). Previously the hook landed only in the running
+  edition's profile - and the `phpvm.cmd` launcher always runs Windows
+  PowerShell, so pwsh sessions never loaded it.
+- `install.ps1 -Prefix` now persists `PHPVM_ROOT` as a user environment variable
+  so the resolver shim, profile hook, and CLI actually find the relocated root.
+  `uninstall.ps1` honors it and removes it on uninstall.
+- User PATH edits (install and uninstall) now go through the registry and
+  preserve `REG_EXPAND_SZ`. The previous
+  `[Environment]::SetEnvironmentVariable` round-trip re-saved the user PATH
+  expanded as `REG_SZ`, permanently flattening `%VAR%`-style entries other
+  tools keep there.
+- `--self-update` falls back to the canonical repo URL when `install.meta` has
+  no `repo=` line and `PHPVM_REPO` is unset (previously it threw).
+- `install.meta` now takes its version from `phpvm.ps1` instead of a second
+  hard-coded copy that could drift.
+
+### Changed
+- Discovery caches `php.exe` version probes keyed on the binary's mtime
+  (`cache\php-versions.txt` under the phpvm root), removing the per-install
+  process spawns from every `cd` with the auto-switch hook. A replaced or
+  upgraded binary changes mtime and is re-probed.
+- The tray menu no longer rebuilds on the 5s refresh timer while it is open.
+- `--doctor` warns about a `.php-version` file that exists but cannot be parsed
+  (the resolver silently skips those).
+
 ## [2.0.0] - 2026-06-07
 
 ### Added

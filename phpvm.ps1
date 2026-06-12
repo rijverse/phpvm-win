@@ -176,6 +176,19 @@ function Invoke-Auto {
     }
 }
 
+function Get-PhpvmHookProfileTargets {
+    # CurrentUserAllHosts for BOTH editions. $PROFILE only describes the edition
+    # running this script - and phpvm.cmd always launches Windows PowerShell, so
+    # relying on it would leave pwsh (Documents\PowerShell) without the hook.
+    $docs = [Environment]::GetFolderPath('MyDocuments')
+    $targets = @(
+        (Join-Path $docs 'WindowsPowerShell\profile.ps1')
+        (Join-Path $docs 'PowerShell\profile.ps1')
+    )
+    if ($PROFILE.CurrentUserAllHosts) { $targets += $PROFILE.CurrentUserAllHosts }
+    return @($targets | Sort-Object -Unique)
+}
+
 function Enable-Hook {
     $hookSrc = Join-Path (Get-PhpvmRoot) 'profile-hook.ps1'
     if (-not (Test-Path -LiteralPath $hookSrc)) {
@@ -192,13 +205,7 @@ function Enable-Hook {
     $sentinel = '# phpvm auto-switch'
     $line = ". `"$hookSrc`"  $sentinel"
 
-    $profileTargets = @($PROFILE.CurrentUserAllHosts)
-    # PS 5.1 vs 7 split - also write the other host's profile if it differs
-    if ($PROFILE.CurrentUserCurrentHost -and ($PROFILE.CurrentUserCurrentHost -ne $PROFILE.CurrentUserAllHosts)) {
-        $profileTargets += $PROFILE.CurrentUserCurrentHost
-    }
-
-    foreach ($p in $profileTargets) {
+    foreach ($p in Get-PhpvmHookProfileTargets) {
         $dir = Split-Path -Parent $p
         if ($dir -and -not (Test-Path -LiteralPath $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -216,8 +223,15 @@ function Enable-Hook {
 
 function Disable-Hook {
     $sentinel = '# phpvm auto-switch'
-    $profileTargets = @($PROFILE.CurrentUserAllHosts, $PROFILE.CurrentUserCurrentHost) |
-        Where-Object { $_ } | Select-Object -Unique
+    # Scrub both editions' AllHosts profiles plus the host-specific files older
+    # phpvm versions wrote ($PROFILE.CurrentUserCurrentHost of the running edition).
+    $docs = [Environment]::GetFolderPath('MyDocuments')
+    $profileTargets = @(
+        Get-PhpvmHookProfileTargets
+        (Join-Path $docs 'WindowsPowerShell\Microsoft.PowerShell_profile.ps1')
+        (Join-Path $docs 'PowerShell\Microsoft.PowerShell_profile.ps1')
+        $PROFILE.CurrentUserCurrentHost
+    ) | Where-Object { $_ } | Sort-Object -Unique
     foreach ($p in $profileTargets) {
         if (-not (Test-Path -LiteralPath $p)) { continue }
         $lines = Get-Content -LiteralPath $p
@@ -250,7 +264,9 @@ function Invoke-SelfUpdate {
         if (-not $Url) { $Url = $env:PHPVM_REPO }
     }
     if (-not $Url) {
-        throw "phpvm: no repo URL. Pass one or set PHPVM_REPO."
+        # install.meta only records repo= for PHPVM_REPO installs; default installs
+        # come from the canonical repo, so fall back to it instead of giving up.
+        $Url = 'https://github.com/rijverse/phpvm-win'
     }
     if (-not $Ref) { $Ref = 'main' }
 

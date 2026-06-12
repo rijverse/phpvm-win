@@ -29,8 +29,7 @@ jobs:
           $stage = "phpvm-windows-${{ steps.ver.outputs.version }}"
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item -Path 'phpvm.ps1','install.ps1','uninstall.ps1','README.md','LICENSE','CHANGELOG.md' -Destination $stage
-          Copy-Item -Path 'lib','profile','assets' -Destination $stage -Recurse
-          "$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Copy-Item -Path 'lib','profile','docs' -Destination $stage -Recurse
           "STAGE=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Zip

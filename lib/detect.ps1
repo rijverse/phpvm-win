@@ -96,6 +96,67 @@ function ConvertTo-PhpMinor {
     return $Version
 }
 
+# --- version cache -----------------------------------------------------------
+# Discovery spawns `php.exe -r` per candidate, and the cd-hook discovers on every
+# directory change - so probes are cached keyed on the binary's mtime. A replaced
+# or upgraded php.exe changes mtime and re-probes; a stale path just misses.
+
+$script:PhpvmVersionCache = @{}
+$script:PhpvmVersionCacheLoaded = $false
+
+function Get-PhpvmVersionCacheFile {
+    Join-Path (Get-PhpvmRoot) 'cache\php-versions.txt'
+}
+
+function Import-PhpvmVersionCache {
+    if ($script:PhpvmVersionCacheLoaded) { return }
+    $script:PhpvmVersionCacheLoaded = $true
+    $file = Get-PhpvmVersionCacheFile
+    if (-not (Test-Path -LiteralPath $file)) { return }
+    foreach ($line in @(Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        # <mtime-ticks>|<version>|<php.exe path, lowercased>
+        $parts = $line -split '\|', 3
+        if ($parts.Count -eq 3 -and $parts[0] -match '^\d+$' -and $parts[1] -match '^\d+\.\d+\.\d+$') {
+            $script:PhpvmVersionCache[$parts[2]] = @{ Ticks = [long]$parts[0]; Version = $parts[1] }
+        }
+    }
+}
+
+function Save-PhpvmVersionCache {
+    # Best effort - a read-only or locked cache must never break discovery.
+    try {
+        $file = Get-PhpvmVersionCacheFile
+        $dir = Split-Path -Parent $file
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $lines = foreach ($k in $script:PhpvmVersionCache.Keys) {
+            $e = $script:PhpvmVersionCache[$k]
+            "$($e.Ticks)|$($e.Version)|$k"
+        }
+        Set-Content -LiteralPath $file -Value $lines -Encoding ASCII
+    } catch { }
+}
+
+function Get-PhpExeVersionCached {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+    if (-not $item) { return $null }
+    Import-PhpvmVersionCache
+    $key = $Path.ToLowerInvariant()
+    $ticks = $item.LastWriteTimeUtc.Ticks
+    if ($script:PhpvmVersionCache.ContainsKey($key) -and $script:PhpvmVersionCache[$key].Ticks -eq $ticks) {
+        return $script:PhpvmVersionCache[$key].Version
+    }
+    $v = Get-PhpExeVersion -Path $Path
+    if ($v) {
+        $script:PhpvmVersionCache[$key] = @{ Ticks = $ticks; Version = $v }
+        Save-PhpvmVersionCache
+    }
+    return $v
+}
+
 function Get-ScoopRoot {
     if ($env:SCOOP -and (Test-Path -LiteralPath $env:SCOOP)) { return $env:SCOOP }
     $candidate = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'scoop'
@@ -115,7 +176,7 @@ function Get-ScoopPhpInstalls {
             $currentDir = Join-Path $_.FullName 'current'
             $phpExe = Join-Path $currentDir 'php.exe'
             if (Test-Path -LiteralPath $phpExe) {
-                $v = Get-PhpExeVersion -Path $phpExe
+                $v = Get-PhpExeVersionCached -Path $phpExe
                 if ($v) {
                     $results += [pscustomobject]@{
                         Version = $v
@@ -164,7 +225,7 @@ function Get-FilesystemPhpInstalls {
             if (-not $m.PSIsContainer) { continue }
             $phpExe = Join-Path $m.FullName 'php.exe'
             if (-not (Test-Path -LiteralPath $phpExe)) { continue }
-            $v = Get-PhpExeVersion -Path $phpExe
+            $v = Get-PhpExeVersionCached -Path $phpExe
             if (-not $v) { continue }
             $results += [pscustomobject]@{
                 Version = $v
@@ -188,7 +249,7 @@ function Get-PhpvmManagedInstalls {
     Get-ChildItem -LiteralPath $phpRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $phpExe = Join-Path $_.FullName 'php.exe'
         if (Test-Path -LiteralPath $phpExe) {
-            $v = Get-PhpExeVersion -Path $phpExe
+            $v = Get-PhpExeVersionCached -Path $phpExe
             if ($v) {
                 $results += [pscustomobject]@{
                     Version = $v
